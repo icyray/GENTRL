@@ -95,30 +95,30 @@ class GENTRL(nn.Module):
             'log_p_z_by_y': log_p_z_by_y.mean().detach().cpu().numpy()
         }
 
-    def save(self, folder_to_save='./'):
+    def save(self, folder_to_save='./', version=""):
         if folder_to_save[-1] != '/':
             folder_to_save = folder_to_save + '/'
-        torch.save(self.enc.state_dict(), folder_to_save + 'enc.model')
-        torch.save(self.dec.state_dict(), folder_to_save + 'dec.model')
-        torch.save(self.lp.state_dict(), folder_to_save + 'lp.model')
+        torch.save(self.enc.state_dict(), folder_to_save + 'enc.model' + version)
+        torch.save(self.dec.state_dict(), folder_to_save + 'dec.model'+ version)
+        torch.save(self.lp.state_dict(), folder_to_save + 'lp.model' + version)
 
-        pickle.dump(self.lp.order, open(folder_to_save + 'order.pkl', 'wb'))
+        pickle.dump(self.lp.order, open(folder_to_save + 'order.pkl' + version, 'wb'))
 
-    def load(self, folder_to_load='./'):
+    def load(self, folder_to_load='./', version=""):
         if folder_to_load[-1] != '/':
             folder_to_load = folder_to_load + '/'
 
-        order = pickle.load(open(folder_to_load + 'order.pkl', 'rb'))
+        order = pickle.load(open(folder_to_load + 'order.pkl' + version, 'rb'))
         self.lp = LP(distr_descr=self.latent_descr + self.feature_descr,
                      tt_int=self.tt_int, tt_type=self.tt_type,
                      order=order)
 
-        self.enc.load_state_dict(torch.load(folder_to_load + 'enc.model'))
-        self.dec.load_state_dict(torch.load(folder_to_load + 'dec.model'))
-        self.lp.load_state_dict(torch.load(folder_to_load + 'lp.model'))
+        self.enc.load_state_dict(torch.load(folder_to_load + 'enc.model' + version))
+        self.dec.load_state_dict(torch.load(folder_to_load + 'dec.model' + version))
+        self.lp.load_state_dict(torch.load(folder_to_load + 'lp.model' + version))
 
     def train_as_vaelp(self, train_loader, num_epochs=10,
-                       verbose_step=50, lr=1e-3):
+                       verbose_step=50, lr=1e-3, save_path=None):
         optimizer = optim.Adam(self.parameters(), lr=lr)
 
         global_stats = TrainStats()
@@ -130,7 +130,7 @@ class GENTRL(nn.Module):
         while epoch_i < num_epochs:
             i = 0
             if verbose_step:
-                print("Epoch", epoch_i, ":", flush=True)
+                print("Epoch", epoch_i+1, ":", flush=True)
 
             if epoch_i in [0, 1, 5]:
                 to_reinit = True
@@ -181,9 +181,11 @@ class GENTRL(nn.Module):
                     i = 0
 
             epoch_i += 1
-            if i > 0:
+            if i >= 0:
                 local_stats.print()
                 local_stats.reset()
+                if save_path != None:
+                    self.save(save_path, version="_checkpoint_%d" % epoch_i)
 
         return global_stats
 
