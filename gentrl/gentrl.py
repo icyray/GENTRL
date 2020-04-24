@@ -27,7 +27,7 @@ class TrainStats():
         for key in self.stats.keys():
             print(str(key) + ": {:4.4};".format(
                 sum(self.stats[key]) / len(self.stats[key])
-            ), end='', flush=True)
+            ), flush=True)
 
         print(flush=True)
 
@@ -135,11 +135,7 @@ class GENTRL(nn.Module):
             if epoch_i in [0, 1, 5]:
                 to_reinit = True
 
-            epoch_i += 1
-
             for x_batch, y_batch in train_loader:
-                if verbose_step:
-                    print("!", end='', flush=True)
 
                 i += 1
 
