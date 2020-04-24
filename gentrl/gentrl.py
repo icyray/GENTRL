@@ -4,6 +4,9 @@ import torch.optim as optim
 from math import pi, log
 from gentrl.lp import LP
 import pickle
+from tqdm import tqdm
+import numpy as np
+import random
 
 from moses.metrics.utils import get_mol
 
@@ -27,9 +30,10 @@ class TrainStats():
         for key in self.stats.keys():
             print(str(key) + ": {:4.4};".format(
                 sum(self.stats[key]) / len(self.stats[key])
-            ), flush=True)
+            ), end='')
 
-        print(flush=True)
+        print()
+
 
 
 class GENTRL(nn.Module):
@@ -189,6 +193,18 @@ class GENTRL(nn.Module):
 
         return global_stats
 
+    def resemblence_filter(self, score, sm, memory):
+        if len(memory) < 1:
+            return score
+
+        nb_occurences = memory.count(sm)
+
+        if nb_occurences > 5:
+            return 0
+        else:
+            return score
+            
+
     def train_as_rl(self,
                     reward_fn,
                     num_iterations=100000, verbose_step=50,
@@ -236,7 +252,8 @@ class GENTRL(nn.Module):
 
             valid_sm = [s for s in smiles if get_mol(s) is not None]
             cur_stats = {'mean_reward': sum(r_list) / len(smiles),
-                         'valid_perc': len(valid_sm) / len(smiles)}
+                         'valid_perc': len(valid_sm) / len(smiles),
+                         'max_reward': max(r_list)}
 
             local_stats.update(cur_stats)
             global_stats.update(cur_stats)

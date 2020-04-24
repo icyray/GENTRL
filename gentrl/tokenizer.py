@@ -16,7 +16,6 @@ _atoms = ['He', 'Li', 'Be', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'Cl', 'Ar',
 def get_tokenizer_re(atoms):
     return re.compile('('+'|'.join(atoms)+r'|\%\d\d|.)')
 
-
 _atoms_re = get_tokenizer_re(_atoms)
 
 
@@ -27,7 +26,6 @@ __i2t = {
     19: 'o', 20: '5', 21: 'H', 22: '(', 23: 'C',
     24: '1', 25: 'S', 26: 's', 27: 'Br'
 }
-
 
 __t2i = {
     '>': 1, '<': 2, '2': 3, 'F': 4, 'Cl': 5, 'N': 6, '[': 7, '6': 8,
@@ -54,23 +52,22 @@ def smiles_tokenizer(line, atoms=None):
     return reg.split(line)[1::2]
 
 
-def encode(sm_list, pad_size=50):
+def encode(sm_list, vocab, pad_size=101):
     """
     Encoder list of smiles to tensor of tokens
     """
     res = []
     lens = []
     for s in sm_list:
-        tokens = ([1] + [__t2i[tok]
-                  for tok in smiles_tokenizer(s)])[:pad_size - 1]
+        tokens = vocab.string2ids(s, add_bos=True, add_eos=True)[:pad_size - 1]
         lens.append(len(tokens))
-        tokens += (pad_size - len(tokens)) * [2]
+        tokens += (pad_size - len(tokens)) * [vocab.pad]
         res.append(tokens)
 
     return torch.tensor(res).long(), lens
 
 
-def decode(tokens_tensor):
+def decode(tokens_tensor, vocab):
     """
     Decodes from tensor of tokens to list of smiles
     """
@@ -80,15 +77,13 @@ def decode(tokens_tensor):
     for i in range(tokens_tensor.shape[0]):
         cur_sm = ''
         for t in tokens_tensor[i].detach().cpu().numpy():
-            if t == 2:
+            if t == vocab.bos:
+                continue
+            elif t == vocab.pad or t == vocab.eos:
                 break
-            elif t > 2:
-                cur_sm += __i2t[t]
+            else:
+                cur_sm += vocab.id2char(t)
 
         smiles_res.append(cur_sm)
 
     return smiles_res
-
-
-def get_vocab_size():
-    return len(__i2t)

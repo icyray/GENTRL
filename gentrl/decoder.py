@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from gentrl.tokenizer import get_vocab_size, encode, decode
+from gentrl.tokenizer import encode, decode
 
 
 class DilConvDecoder(nn.Module):
@@ -10,7 +10,7 @@ class DilConvDecoder(nn.Module):
         It make conditinioning on previosly sampled tokens by running
         stack of dilation convolution on them.
     '''
-    def __init__(self, latent_input_size, token_weights=None,
+    def __init__(self, vocab, latent_input_size, token_weights=None,
                  split_len=50, num_dilated_layers=7, num_channels=128):
         r'''
         Args:
@@ -18,18 +18,19 @@ class DilConvDecoder(nn.Module):
             token_weights: Tensor of shape [num_tokens], where i-th element
                     contains the weight of i-th token. If None, then all
                     tokens has the same weight.
-            split_len: int, maximum length of token sequence
+            split_len:imum l int, maxength of token sequence
             num_dilated_layers: int, how much dilated layers is in stack
             num_channels: int, num channels in convolutional layers
         '''
         super(DilConvDecoder, self).__init__()
-        self.vocab_size = get_vocab_size()
+        self.vocab = vocab
+        self.vocab_size = len(vocab)
         self.latent_input_size = latent_input_size
         self.split_len = split_len
         self.num_dilated_layers = num_dilated_layers
         self.num_channels = num_channels
         self.token_weights = token_weights
-        self.eos = 2
+        self.eos = vocab.pad
 
         cur_dil = 1
         self.dil_conv_layers = []
@@ -104,7 +105,7 @@ class DilConvDecoder(nn.Module):
     def weighted_forward(self, sm_list, z):
         '''
         '''
-        x = encode(sm_list)[0].to(
+        x = encode(sm_list, self.vocab)[0].to(
             self.input_embeddings.weight.data.device
         )
 
@@ -165,7 +166,7 @@ class DilConvDecoder(nn.Module):
 
         ans_logits = torch.cat(ans_logits, dim=0)
         ans_seqs = torch.tensor(ans_seqs)[:, 1:]
-        return decode(ans_seqs)
+        return decode(ans_seqs, self.vocab)
 
 
 class DilConv1dWithGLU(nn.Module):
