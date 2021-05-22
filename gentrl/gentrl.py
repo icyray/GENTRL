@@ -7,6 +7,7 @@ import pickle
 from tqdm import tqdm
 import numpy as np
 import random
+import re
 
 from moses.metrics.utils import get_mol
 
@@ -61,6 +62,7 @@ class GENTRL(nn.Module):
 
         self.beta = beta
         self.gamma = gamma
+        self.checkpoint = 0
 
     def get_elbo(self, x, y):
         means, log_stds = torch.split(self.enc.encode(x),
@@ -111,7 +113,10 @@ class GENTRL(nn.Module):
     def load(self, folder_to_load='./', version=""):
         if folder_to_load[-1] != '/':
             folder_to_load = folder_to_load + '/'
-
+        
+        if version != '':
+            self.checkpoint = int(re.match(r'-checkpoint_(\d+)', version).group(1))
+        
         order = pickle.load(open(folder_to_load + 'order.pkl' + version, 'rb'))
         self.lp = LP(distr_descr=self.latent_descr + self.feature_descr,
                      tt_int=self.tt_int, tt_type=self.tt_type,
@@ -127,8 +132,8 @@ class GENTRL(nn.Module):
 
         global_stats = TrainStats()
         local_stats = TrainStats()
-
-        epoch_i = 0
+        
+        epoch_i = self.checkpoint
         to_reinit = False
         buf = None
         while epoch_i < num_epochs:
@@ -140,7 +145,9 @@ class GENTRL(nn.Module):
                 to_reinit = True
 
             for x_batch, y_batch in train_loader:
-
+                #if verbose_step:
+                    #print("!", end='')
+                    
                 i += 1
 
                 y_batch = y_batch.float().to(self.lp.tt_cores[0].device)
@@ -189,7 +196,8 @@ class GENTRL(nn.Module):
                 local_stats.print()
                 local_stats.reset()
                 if save_path != None:
-                    self.save(save_path, version="_checkpoint_%d" % epoch_i)
+                    self.save(save_path, version="-checkpoint_%d" % epoch_i)
+                self.checkpoint = epoch_i
 
         return global_stats
 
@@ -210,16 +218,16 @@ class GENTRL(nn.Module):
                     num_iterations=100000, verbose_step=50,
                     batch_size=200,
                     cond_lb=-2, cond_rb=0,
-                    lr_lp=1e-5, lr_dec=1e-6):
+                    lr_lp=1e-5, lr_dec=1e-6, save_path=None, checkpoint_step=5000):
         optimizer_lp = optim.Adam(self.lp.parameters(), lr=lr_lp)
         optimizer_dec = optim.Adam(self.dec.latent_fc.parameters(), lr=lr_dec)
 
         global_stats = TrainStats()
         local_stats = TrainStats()
 
-        cur_iteration = 0
+        cur_iteration = self.checkpoint #未传参，checkpoint默认为0
         while cur_iteration < num_iterations:
-            print("!", end='')
+            #print("!", end='')
 
             exploit_size = int(batch_size * (1 - 0.3))
             exploit_z = self.lp.sample(exploit_size, 50 * ['s'] + ['m'])
@@ -261,8 +269,13 @@ class GENTRL(nn.Module):
             cur_iteration += 1
 
             if verbose_step and (cur_iteration + 1) % verbose_step == 0:
+                print(f"iteration: {cur_iteration + 1}/{num_iterations};", flush=True, end='')
                 local_stats.print()
                 local_stats.reset()
+                
+            if save_path != None and cur_iteration % checkpoint_step == 0:
+                    self.save(save_path, version="-checkpoint_%d" % cur_iteration)
+            self.checkpoint = cur_iteration
 
         return global_stats
 
